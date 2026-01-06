@@ -1,6 +1,7 @@
 import pygame
 import random
 import sys
+import math
 
 # Constants
 SCREEN_WIDTH = 600
@@ -8,24 +9,25 @@ SCREEN_HEIGHT = 800
 GRID_SIZE = 8
 CELL_SIZE = 50
 GRID_MARGIN = (SCREEN_WIDTH - (GRID_SIZE * CELL_SIZE)) // 2
-GRID_TOP = 100
+GRID_TOP = 120
 
 # Colors
 WHITE = (255, 255, 255)
 BLACK = (0, 0, 0)
-GRAY = (200, 200, 200)
-DARK_GRAY = (50, 50, 50)
+DARK_BG = (10, 15, 30)
+
+# Vibrant Block Colors
 COLORS = [
-    (255, 50, 50),   # Red
-    (50, 255, 50),   # Green
-    (50, 50, 255),   # Blue
-    (255, 255, 50),  # Yellow
-    (255, 50, 255),  # Magenta
-    (50, 255, 255),  # Cyan
-    (255, 165, 0),   # Orange
+    (255, 80, 80),   # Soft Red
+    (80, 255, 120),  # Mint Green
+    (80, 150, 255),  # Sky Blue
+    (255, 220, 80),  # Golden Yellow
+    (220, 100, 255), # Lavender
+    (80, 255, 240),  # Turquoise
+    (255, 150, 80),  # Coral
 ]
 
-# Block Shapes (relative coordinates)
+# Block Shapes
 SHAPES = [
     [(0, 0)], # Single
     [(0, 0), (1, 0)], # 1x2
@@ -42,6 +44,54 @@ SHAPES = [
     [(0, 0), (1, 0), (2, 0), (1, 1)], # T-shape
 ]
 
+def draw_3d_rect(surface, color, rect, border_radius=4):
+    """Draws a rectangle with a 3D beveled effect."""
+    # Main body
+    pygame.draw.rect(surface, color, rect, border_radius=border_radius)
+    
+    # Highlight (top and left)
+    highlight_color = [min(255, c + 60) for c in color]
+    pygame.draw.line(surface, highlight_color, (rect.left + 2, rect.top + 2), (rect.right - 2, rect.top + 2), 3)
+    pygame.draw.line(surface, highlight_color, (rect.left + 2, rect.top + 2), (rect.left + 2, rect.bottom - 2), 3)
+    
+    # Shadow (bottom and right)
+    shadow_color = [max(0, c - 60) for c in color]
+    pygame.draw.line(surface, shadow_color, (rect.left + 2, rect.bottom - 2), (rect.right - 2, rect.bottom - 2), 3)
+    pygame.draw.line(surface, shadow_color, (rect.right - 2, rect.top + 2), (rect.right - 2, rect.bottom - 2), 3)
+    
+    # Subtle inner border
+    pygame.draw.rect(surface, (0, 0, 0, 50), rect, 1, border_radius=border_radius)
+
+class AuroraBackground:
+    def __init__(self):
+        self.time = 0
+        self.layers = [
+            {"color": (20, 60, 40), "speed": 0.01, "offset": 0},
+            {"color": (30, 20, 70), "speed": 0.015, "offset": math.pi},
+            {"color": (10, 40, 60), "speed": 0.008, "offset": math.pi / 2}
+        ]
+
+    def draw(self, surface):
+        self.time += 1
+        surface.fill(DARK_BG)
+        
+        # Create a temporary surface for blending
+        temp_surface = pygame.Surface((SCREEN_WIDTH, SCREEN_HEIGHT), pygame.SRCALPHA)
+        
+        for layer in self.layers:
+            c = layer["color"]
+            alpha = int(80 + 40 * math.sin(self.time * layer["speed"] + layer["offset"]))
+            
+            # Draw gradient-like waves
+            for y in range(0, SCREEN_HEIGHT, 40):
+                shift = math.sin(self.time * 0.02 + y * 0.005) * 50
+                rect = pygame.Rect(0, y, SCREEN_WIDTH, 40)
+                # Vary alpha by height to create a fade effect
+                h_alpha = int(alpha * (1 - abs(y - SCREEN_HEIGHT/2) / (SCREEN_HEIGHT/2)))
+                pygame.draw.rect(temp_surface, (*c, h_alpha), rect)
+        
+        surface.blit(temp_surface, (0, 0))
+
 class Block:
     def __init__(self, shape, color):
         self.shape = shape
@@ -52,7 +102,7 @@ class Block:
         self.offset_y = 0
         self.original_pos = (0, 0)
         self.pos = [0, 0]
-        self.scale = 0.6 # Smaller scale when in preview
+        self.scale = 0.6
 
     def update_rects(self):
         self.rects = []
@@ -69,16 +119,17 @@ class Block:
     def draw(self, surface):
         self.update_rects()
         for rect in self.rects:
-            pygame.draw.rect(surface, self.color, rect)
-            pygame.draw.rect(surface, BLACK, rect, 1)
+            draw_3d_rect(surface, self.color, rect)
 
 class Game:
     def __init__(self):
         pygame.init()
         self.screen = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT))
-        pygame.display.set_caption("Block Blast")
+        pygame.display.set_caption("Block Blast - Aurora Edition")
         self.clock = pygame.time.Clock()
-        self.font = pygame.font.SysFont("Arial", 32)
+        self.font = pygame.font.SysFont("Verdana", 36, bold=True)
+        self.small_font = pygame.font.SysFont("Verdana", 20)
+        self.aurora = AuroraBackground()
         self.reset_game()
 
     def reset_game(self):
@@ -95,9 +146,8 @@ class Game:
                 shape = random.choice(SHAPES)
                 color = random.choice(COLORS)
                 block = Block(shape, color)
-                # Position blocks at the bottom
-                x = 100 + i * 150
-                y = 650
+                x = 80 + i * 160
+                y = 640
                 block.pos = [x, y]
                 block.original_pos = (x, y)
                 self.blocks.append(block)
@@ -150,16 +200,20 @@ class Game:
 
         cleared = len(rows_to_clear) + len(cols_to_clear)
         if cleared > 0:
-            self.score += (cleared * 100) * cleared # Bonus for multiple lines
+            self.score += (cleared * 100) * cleared
 
     def draw_grid(self):
+        # Draw grid background panel
+        panel_rect = pygame.Rect(GRID_MARGIN - 10, GRID_TOP - 10, (GRID_SIZE * CELL_SIZE) + 20, (GRID_SIZE * CELL_SIZE) + 20)
+        pygame.draw.rect(self.screen, (255, 255, 255, 20), panel_rect, border_radius=10)
+        
         for r in range(GRID_SIZE):
             for c in range(GRID_SIZE):
                 rect = pygame.Rect(GRID_MARGIN + c * CELL_SIZE, GRID_TOP + r * CELL_SIZE, CELL_SIZE, CELL_SIZE)
-                pygame.draw.rect(self.screen, DARK_GRAY, rect, 1)
+                # Draw empty cell
+                pygame.draw.rect(self.screen, (40, 50, 80), rect, 1)
                 if self.grid[r][c]:
-                    pygame.draw.rect(self.screen, self.grid[r][c], rect)
-                    pygame.draw.rect(self.screen, BLACK, rect, 1)
+                    draw_3d_rect(self.screen, self.grid[r][c], rect)
 
     def run(self):
         while True:
@@ -181,14 +235,14 @@ class Game:
                             if rect.collidepoint(pos):
                                 self.dragging_block = block
                                 block.dragging = True
-                                block.offset_x = pos[0] - block.pos[0]
-                                block.offset_y = pos[1] - block.pos[1]
+                                # Center block on mouse when dragging
+                                block.offset_x = (len(set(d[0] for d in block.shape)) * CELL_SIZE) // 2
+                                block.offset_y = (len(set(d[1] for d in block.shape)) * CELL_SIZE) // 2
                                 break
                         if self.dragging_block: break
 
                 if event.type == pygame.MOUSEBUTTONUP:
                     if self.dragging_block:
-                        # Check if dropped on grid
                         grid_x = (self.dragging_block.pos[0] - GRID_MARGIN + CELL_SIZE // 2) // CELL_SIZE
                         grid_y = (self.dragging_block.pos[1] - GRID_TOP + CELL_SIZE // 2) // CELL_SIZE
                         
@@ -206,7 +260,7 @@ class Game:
                         self.dragging_block.pos[0] = pos[0] - self.dragging_block.offset_x
                         self.dragging_block.pos[1] = pos[1] - self.dragging_block.offset_y
 
-            self.screen.fill(BLACK)
+            self.aurora.draw(self.screen)
             self.draw_grid()
             
             for block in self.blocks:
@@ -216,13 +270,25 @@ class Game:
             if self.dragging_block:
                 self.dragging_block.draw(self.screen)
 
-            # Draw Score
-            score_text = self.font.render(f"Score: {self.score}", True, WHITE)
-            self.screen.blit(score_text, (20, 20))
+            # UI Elements
+            score_surf = self.font.render(f"{self.score}", True, WHITE)
+            score_rect = score_surf.get_rect(center=(SCREEN_WIDTH // 2, 60))
+            self.screen.blit(score_surf, score_rect)
+            
+            label_surf = self.small_font.render("SCORE", True, (200, 220, 255))
+            label_rect = label_surf.get_rect(center=(SCREEN_WIDTH // 2, 25))
+            self.screen.blit(label_surf, label_rect)
 
             if self.game_over:
-                over_text = self.font.render("GAME OVER! Press R to Restart", True, WHITE)
-                self.screen.blit(over_text, (SCREEN_WIDTH // 2 - 180, SCREEN_HEIGHT // 2))
+                overlay = pygame.Surface((SCREEN_WIDTH, SCREEN_HEIGHT), pygame.SRCALPHA)
+                overlay.fill((0, 0, 0, 180))
+                self.screen.blit(overlay, (0, 0))
+                
+                over_text = self.font.render("GAME OVER", True, WHITE)
+                restart_text = self.small_font.render("Press R to Restart", True, (200, 200, 200))
+                
+                self.screen.blit(over_text, over_text.get_rect(center=(SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2 - 20)))
+                self.screen.blit(restart_text, restart_text.get_rect(center=(SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2 + 30)))
 
             pygame.display.flip()
             self.clock.tick(60)
