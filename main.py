@@ -14,7 +14,7 @@ GRID_TOP = 120
 # Colors
 WHITE = (255, 255, 255)
 BLACK = (0, 0, 0)
-DARK_BG = (10, 15, 30)
+DARK_BG = (5, 10, 25)
 
 # Vibrant Block Colors
 COLORS = [
@@ -46,51 +46,66 @@ SHAPES = [
 
 def draw_3d_rect(surface, color, rect, border_radius=4):
     """Draws a rectangle with a 3D beveled effect."""
-    # Main body
     pygame.draw.rect(surface, color, rect, border_radius=border_radius)
     
-    # Highlight (top and left)
-    highlight_color = [min(255, c + 60) for c in color]
+    # Highlight
+    highlight_color = [min(255, c + 70) for c in color]
     pygame.draw.line(surface, highlight_color, (rect.left + 2, rect.top + 2), (rect.right - 2, rect.top + 2), 3)
     pygame.draw.line(surface, highlight_color, (rect.left + 2, rect.top + 2), (rect.left + 2, rect.bottom - 2), 3)
     
-    # Shadow (bottom and right)
-    shadow_color = [max(0, c - 60) for c in color]
+    # Shadow
+    shadow_color = [max(0, c - 70) for c in color]
     pygame.draw.line(surface, shadow_color, (rect.left + 2, rect.bottom - 2), (rect.right - 2, rect.bottom - 2), 3)
     pygame.draw.line(surface, shadow_color, (rect.right - 2, rect.top + 2), (rect.right - 2, rect.bottom - 2), 3)
     
-    # Subtle inner border
-    pygame.draw.rect(surface, (0, 0, 0, 50), rect, 1, border_radius=border_radius)
+    pygame.draw.rect(surface, (0, 0, 0, 40), rect, 1, border_radius=border_radius)
 
 class AuroraBackground:
     def __init__(self):
         self.time = 0
-        self.layers = [
-            {"color": (20, 60, 40), "speed": 0.01, "offset": 0},
-            {"color": (30, 20, 70), "speed": 0.015, "offset": math.pi},
-            {"color": (10, 40, 60), "speed": 0.008, "offset": math.pi / 2}
+        # Define multiple "waves" for the aurora
+        self.waves = [
+            {"color": (0, 255, 150), "amplitude": 40, "frequency": 0.01, "speed": 0.02, "y_offset": 200},
+            {"color": (0, 150, 255), "amplitude": 60, "frequency": 0.008, "speed": -0.015, "y_offset": 350},
+            {"color": (150, 0, 255), "amplitude": 50, "frequency": 0.012, "speed": 0.01, "y_offset": 500},
+            {"color": (0, 255, 100), "amplitude": 30, "frequency": 0.015, "speed": -0.025, "y_offset": 150}
         ]
 
     def draw(self, surface):
         self.time += 1
         surface.fill(DARK_BG)
         
-        # Create a temporary surface for blending
-        temp_surface = pygame.Surface((SCREEN_WIDTH, SCREEN_HEIGHT), pygame.SRCALPHA)
+        # Create a surface for the aurora with alpha support
+        aurora_surf = pygame.Surface((SCREEN_WIDTH, SCREEN_HEIGHT), pygame.SRCALPHA)
         
-        for layer in self.layers:
-            c = layer["color"]
-            alpha = int(80 + 40 * math.sin(self.time * layer["speed"] + layer["offset"]))
-            
-            # Draw gradient-like waves
-            for y in range(0, SCREEN_HEIGHT, 40):
-                shift = math.sin(self.time * 0.02 + y * 0.005) * 50
-                rect = pygame.Rect(0, y, SCREEN_WIDTH, 40)
-                # Vary alpha by height to create a fade effect
-                h_alpha = int(alpha * (1 - abs(y - SCREEN_HEIGHT/2) / (SCREEN_HEIGHT/2)))
-                pygame.draw.rect(temp_surface, (*c, h_alpha), rect)
-        
-        surface.blit(temp_surface, (0, 0))
+        for wave in self.waves:
+            points = []
+            color = wave["color"]
+            # Draw the wave as a series of vertical lines or a polygon
+            for x in range(0, SCREEN_WIDTH + 10, 10):
+                # Calculate wave height using sine waves
+                y_var = math.sin(x * wave["frequency"] + self.time * wave["speed"]) * wave["amplitude"]
+                y_var += math.sin(x * 0.005 + self.time * 0.01) * 20 # Secondary wave for complexity
+                y_pos = wave["y_offset"] + y_var
+                points.append((x, y_pos))
+
+            # Draw glowing bands
+            for i in range(len(points) - 1):
+                p1 = points[i]
+                p2 = points[i+1]
+                # Draw multiple lines with decreasing alpha to create a glow/blur effect
+                for glow in range(15):
+                    alpha = int(40 * (1 - glow / 15))
+                    # Vary alpha over time for "shimmer"
+                    shimmer = (math.sin(self.time * 0.05 + p1[0] * 0.01) + 1) / 2
+                    final_alpha = int(alpha * (0.5 + 0.5 * shimmer))
+                    
+                    pygame.draw.line(aurora_surf, (*color, final_alpha), 
+                                     (p1[0], p1[1] - glow * 4), (p2[0], p2[1] - glow * 4), 8)
+                    pygame.draw.line(aurora_surf, (*color, final_alpha), 
+                                     (p1[0], p1[1] + glow * 4), (p2[0], p2[1] + glow * 4), 8)
+
+        surface.blit(aurora_surf, (0, 0))
 
 class Block:
     def __init__(self, shape, color):
@@ -203,15 +218,16 @@ class Game:
             self.score += (cleared * 100) * cleared
 
     def draw_grid(self):
-        # Draw grid background panel
+        # Draw grid background panel with transparency
         panel_rect = pygame.Rect(GRID_MARGIN - 10, GRID_TOP - 10, (GRID_SIZE * CELL_SIZE) + 20, (GRID_SIZE * CELL_SIZE) + 20)
-        pygame.draw.rect(self.screen, (255, 255, 255, 20), panel_rect, border_radius=10)
+        s = pygame.Surface((panel_rect.width, panel_rect.height), pygame.SRCALPHA)
+        s.fill((255, 255, 255, 15))
+        self.screen.blit(s, (panel_rect.x, panel_rect.y))
         
         for r in range(GRID_SIZE):
             for c in range(GRID_SIZE):
                 rect = pygame.Rect(GRID_MARGIN + c * CELL_SIZE, GRID_TOP + r * CELL_SIZE, CELL_SIZE, CELL_SIZE)
-                # Draw empty cell
-                pygame.draw.rect(self.screen, (40, 50, 80), rect, 1)
+                pygame.draw.rect(self.screen, (60, 70, 100), rect, 1)
                 if self.grid[r][c]:
                     draw_3d_rect(self.screen, self.grid[r][c], rect)
 
@@ -235,7 +251,7 @@ class Game:
                             if rect.collidepoint(pos):
                                 self.dragging_block = block
                                 block.dragging = True
-                                # Center block on mouse when dragging
+                                # Center block on mouse
                                 block.offset_x = (len(set(d[0] for d in block.shape)) * CELL_SIZE) // 2
                                 block.offset_y = (len(set(d[1] for d in block.shape)) * CELL_SIZE) // 2
                                 break
@@ -270,7 +286,7 @@ class Game:
             if self.dragging_block:
                 self.dragging_block.draw(self.screen)
 
-            # UI Elements
+            # UI
             score_surf = self.font.render(f"{self.score}", True, WHITE)
             score_rect = score_surf.get_rect(center=(SCREEN_WIDTH // 2, 60))
             self.screen.blit(score_surf, score_rect)
