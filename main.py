@@ -14,17 +14,17 @@ GRID_TOP = 120
 # Colors
 WHITE = (255, 255, 255)
 BLACK = (0, 0, 0)
-DARK_BG = (5, 10, 25)
+DARK_BG = (5, 8, 20)
 
-# Vibrant Block Colors
+# Vibrant Block Colors (Glassy variants)
 COLORS = [
-    (255, 80, 80),   # Soft Red
-    (80, 255, 120),  # Mint Green
-    (80, 150, 255),  # Sky Blue
-    (255, 220, 80),  # Golden Yellow
-    (220, 100, 255), # Lavender
-    (80, 255, 240),  # Turquoise
-    (255, 150, 80),  # Coral
+    (255, 100, 100), # Soft Red
+    (100, 255, 150), # Mint Green
+    (100, 180, 255), # Sky Blue
+    (255, 230, 100), # Golden Yellow
+    (230, 130, 255), # Lavender
+    (100, 255, 240), # Turquoise
+    (255, 170, 100), # Coral
 ]
 
 # Block Shapes
@@ -44,67 +44,65 @@ SHAPES = [
     [(0, 0), (1, 0), (2, 0), (1, 1)], # T-shape
 ]
 
-def draw_3d_rect(surface, color, rect, border_radius=4):
-    """Draws a rectangle with a 3D beveled effect."""
-    pygame.draw.rect(surface, color, rect, border_radius=border_radius)
+def draw_glass_rect(surface, color, rect, border_radius=12):
+    """Draws a rectangle with Apple's 'Liquid Glass' effect."""
+    # 1. Base translucent layer
+    base_surf = pygame.Surface((rect.width, rect.height), pygame.SRCALPHA)
+    pygame.draw.rect(base_surf, (*color, 180), (0, 0, rect.width, rect.height), border_radius=border_radius)
+    surface.blit(base_surf, (rect.x, rect.y))
     
-    # Highlight
-    highlight_color = [min(255, c + 70) for c in color]
-    pygame.draw.line(surface, highlight_color, (rect.left + 2, rect.top + 2), (rect.right - 2, rect.top + 2), 3)
-    pygame.draw.line(surface, highlight_color, (rect.left + 2, rect.top + 2), (rect.left + 2, rect.bottom - 2), 3)
+    # 2. Inner Glow / Bevel
+    # Top highlight (specular)
+    highlight_surf = pygame.Surface((rect.width, rect.height), pygame.SRCALPHA)
+    pygame.draw.rect(highlight_surf, (255, 255, 255, 80), (2, 2, rect.width-4, rect.height//2), border_radius=border_radius)
+    surface.blit(highlight_surf, (rect.x, rect.y))
     
-    # Shadow
-    shadow_color = [max(0, c - 70) for c in color]
-    pygame.draw.line(surface, shadow_color, (rect.left + 2, rect.bottom - 2), (rect.right - 2, rect.bottom - 2), 3)
-    pygame.draw.line(surface, shadow_color, (rect.right - 2, rect.top + 2), (rect.right - 2, rect.bottom - 2), 3)
+    # 3. Glass Reflection (Diagonal streak)
+    reflect_surf = pygame.Surface((rect.width, rect.height), pygame.SRCALPHA)
+    pygame.draw.polygon(reflect_surf, (255, 255, 255, 40), [
+        (rect.width*0.2, 0), (rect.width*0.5, 0), 
+        (rect.width*0.3, rect.height), (0, rect.height)
+    ])
+    surface.blit(reflect_surf, (rect.x, rect.y))
+
+    # 4. Crisp Border
+    pygame.draw.rect(surface, (255, 255, 255, 100), rect, 1, border_radius=border_radius)
     
-    pygame.draw.rect(surface, (0, 0, 0, 40), rect, 1, border_radius=border_radius)
+    # 5. Bottom Shadow (Inner)
+    shadow_color = [max(0, c - 80) for c in color]
+    pygame.draw.rect(surface, (*shadow_color, 100), (rect.x+2, rect.bottom-6, rect.width-4, 4), border_radius=border_radius)
 
 class AuroraBackground:
     def __init__(self):
         self.time = 0
-        # Define multiple "waves" for the aurora
         self.waves = [
-            {"color": (0, 255, 150), "amplitude": 40, "frequency": 0.01, "speed": 0.02, "y_offset": 200},
-            {"color": (0, 150, 255), "amplitude": 60, "frequency": 0.008, "speed": -0.015, "y_offset": 350},
-            {"color": (150, 0, 255), "amplitude": 50, "frequency": 0.012, "speed": 0.01, "y_offset": 500},
-            {"color": (0, 255, 100), "amplitude": 30, "frequency": 0.015, "speed": -0.025, "y_offset": 150}
+            {"color": (0, 255, 180), "amplitude": 50, "frequency": 0.01, "speed": 0.015, "y_offset": 250},
+            {"color": (100, 100, 255), "amplitude": 70, "frequency": 0.007, "speed": -0.01, "y_offset": 400},
+            {"color": (200, 50, 255), "amplitude": 60, "frequency": 0.009, "speed": 0.008, "y_offset": 550},
         ]
 
     def draw(self, surface):
         self.time += 1
         surface.fill(DARK_BG)
-        
-        # Create a surface for the aurora with alpha support
         aurora_surf = pygame.Surface((SCREEN_WIDTH, SCREEN_HEIGHT), pygame.SRCALPHA)
         
         for wave in self.waves:
             points = []
-            color = wave["color"]
-            # Draw the wave as a series of vertical lines or a polygon
-            for x in range(0, SCREEN_WIDTH + 10, 10):
-                # Calculate wave height using sine waves
+            for x in range(0, SCREEN_WIDTH + 20, 20):
                 y_var = math.sin(x * wave["frequency"] + self.time * wave["speed"]) * wave["amplitude"]
-                y_var += math.sin(x * 0.005 + self.time * 0.01) * 20 # Secondary wave for complexity
-                y_pos = wave["y_offset"] + y_var
-                points.append((x, y_pos))
+                y_var += math.sin(x * 0.004 + self.time * 0.012) * 30
+                points.append((x, wave["y_offset"] + y_var))
 
-            # Draw glowing bands
             for i in range(len(points) - 1):
-                p1 = points[i]
-                p2 = points[i+1]
-                # Draw multiple lines with decreasing alpha to create a glow/blur effect
-                for glow in range(15):
-                    alpha = int(40 * (1 - glow / 15))
-                    # Vary alpha over time for "shimmer"
-                    shimmer = (math.sin(self.time * 0.05 + p1[0] * 0.01) + 1) / 2
-                    final_alpha = int(alpha * (0.5 + 0.5 * shimmer))
-                    
-                    pygame.draw.line(aurora_surf, (*color, final_alpha), 
-                                     (p1[0], p1[1] - glow * 4), (p2[0], p2[1] - glow * 4), 8)
-                    pygame.draw.line(aurora_surf, (*color, final_alpha), 
-                                     (p1[0], p1[1] + glow * 4), (p2[0], p2[1] + glow * 4), 8)
-
+                p1, p2 = points[i], points[i+1]
+                for glow in range(12):
+                    alpha = int(35 * (1 - glow / 12))
+                    shimmer = (math.sin(self.time * 0.04 + p1[0] * 0.01) + 1) / 2
+                    final_alpha = int(alpha * (0.4 + 0.6 * shimmer))
+                    pygame.draw.line(aurora_surf, (*wave["color"], final_alpha), 
+                                     (p1[0], p1[1] - glow * 5), (p2[0], p2[1] - glow * 5), 10)
+                    pygame.draw.line(aurora_surf, (*wave["color"], final_alpha), 
+                                     (p1[0], p1[1] + glow * 5), (p2[0], p2[1] + glow * 5), 10)
         surface.blit(aurora_surf, (0, 0))
 
 class Block:
@@ -113,10 +111,8 @@ class Block:
         self.color = color
         self.rects = []
         self.dragging = False
-        self.offset_x = 0
-        self.offset_y = 0
-        self.original_pos = (0, 0)
         self.pos = [0, 0]
+        self.original_pos = (0, 0)
         self.scale = 0.6
 
     def update_rects(self):
@@ -134,16 +130,16 @@ class Block:
     def draw(self, surface):
         self.update_rects()
         for rect in self.rects:
-            draw_3d_rect(surface, self.color, rect)
+            draw_glass_rect(surface, self.color, rect)
 
 class Game:
     def __init__(self):
         pygame.init()
         self.screen = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT))
-        pygame.display.set_caption("Block Blast - Aurora Edition")
+        pygame.display.set_caption("Block Blast - Liquid Glass Edition")
         self.clock = pygame.time.Clock()
-        self.font = pygame.font.SysFont("Verdana", 36, bold=True)
-        self.small_font = pygame.font.SysFont("Verdana", 20)
+        self.font = pygame.font.SysFont("Verdana", 42, bold=True)
+        self.small_font = pygame.font.SysFont("Verdana", 18, bold=True)
         self.aurora = AuroraBackground()
         self.reset_game()
 
@@ -166,16 +162,13 @@ class Game:
                 block.pos = [x, y]
                 block.original_pos = (x, y)
                 self.blocks.append(block)
-            
-            if self.check_game_over():
-                self.game_over = True
+            if self.check_game_over(): self.game_over = True
 
     def check_game_over(self):
         for block in self.blocks:
             for r in range(GRID_SIZE):
                 for c in range(GRID_SIZE):
-                    if self.can_place(block, r, c):
-                        return False
+                    if self.can_place(block, r, c): return False
         return True
 
     def can_place(self, block, row, col):
@@ -194,55 +187,38 @@ class Game:
         self.spawn_blocks()
 
     def clear_lines(self):
-        rows_to_clear = []
-        cols_to_clear = []
-
-        for r in range(GRID_SIZE):
-            if all(self.grid[r][c] is not None for c in range(GRID_SIZE)):
-                rows_to_clear.append(r)
-        
-        for c in range(GRID_SIZE):
-            if all(self.grid[r][c] is not None for r in range(GRID_SIZE)):
-                cols_to_clear.append(c)
-
+        rows_to_clear = [r for r in range(GRID_SIZE) if all(self.grid[r][c] is not None for c in range(GRID_SIZE))]
+        cols_to_clear = [c for c in range(GRID_SIZE) if all(self.grid[r][c] is not None for r in range(GRID_SIZE))]
         for r in rows_to_clear:
-            for c in range(GRID_SIZE):
-                self.grid[r][c] = None
-        
+            for c in range(GRID_SIZE): self.grid[r][c] = None
         for c in cols_to_clear:
-            for r in range(GRID_SIZE):
-                self.grid[r][c] = None
-
+            for r in range(GRID_SIZE): self.grid[r][c] = None
         cleared = len(rows_to_clear) + len(cols_to_clear)
-        if cleared > 0:
-            self.score += (cleared * 100) * cleared
+        if cleared > 0: self.score += (cleared * 100) * cleared
 
     def draw_grid(self):
-        # Draw grid background panel with transparency
-        panel_rect = pygame.Rect(GRID_MARGIN - 10, GRID_TOP - 10, (GRID_SIZE * CELL_SIZE) + 20, (GRID_SIZE * CELL_SIZE) + 20)
+        # Glassy Grid Panel
+        panel_rect = pygame.Rect(GRID_MARGIN - 15, GRID_TOP - 15, (GRID_SIZE * CELL_SIZE) + 30, (GRID_SIZE * CELL_SIZE) + 30)
         s = pygame.Surface((panel_rect.width, panel_rect.height), pygame.SRCALPHA)
-        s.fill((255, 255, 255, 15))
+        pygame.draw.rect(s, (255, 255, 255, 20), (0, 0, panel_rect.width, panel_rect.height), border_radius=20)
+        pygame.draw.rect(s, (255, 255, 255, 40), (0, 0, panel_rect.width, panel_rect.height), 2, border_radius=20)
         self.screen.blit(s, (panel_rect.x, panel_rect.y))
         
         for r in range(GRID_SIZE):
             for c in range(GRID_SIZE):
                 rect = pygame.Rect(GRID_MARGIN + c * CELL_SIZE, GRID_TOP + r * CELL_SIZE, CELL_SIZE, CELL_SIZE)
-                pygame.draw.rect(self.screen, (60, 70, 100), rect, 1)
+                pygame.draw.rect(self.screen, (255, 255, 255, 30), rect, 1)
                 if self.grid[r][c]:
-                    draw_3d_rect(self.screen, self.grid[r][c], rect)
+                    draw_glass_rect(self.screen, self.grid[r][c], rect)
 
     def run(self):
         while True:
             for event in pygame.event.get():
                 if event.type == pygame.QUIT:
-                    pygame.quit()
-                    sys.exit()
-                
+                    pygame.quit(); sys.exit()
                 if self.game_over:
-                    if event.type == pygame.KEYDOWN and event.key == pygame.K_r:
-                        self.reset_game()
+                    if event.type == pygame.KEYDOWN and event.key == pygame.K_r: self.reset_game()
                     continue
-
                 if event.type == pygame.MOUSEBUTTONDOWN:
                     pos = pygame.mouse.get_pos()
                     for block in self.blocks:
@@ -251,25 +227,20 @@ class Game:
                             if rect.collidepoint(pos):
                                 self.dragging_block = block
                                 block.dragging = True
-                                # Center block on mouse
                                 block.offset_x = (len(set(d[0] for d in block.shape)) * CELL_SIZE) // 2
                                 block.offset_y = (len(set(d[1] for d in block.shape)) * CELL_SIZE) // 2
                                 break
                         if self.dragging_block: break
-
                 if event.type == pygame.MOUSEBUTTONUP:
                     if self.dragging_block:
-                        grid_x = (self.dragging_block.pos[0] - GRID_MARGIN + CELL_SIZE // 2) // CELL_SIZE
-                        grid_y = (self.dragging_block.pos[1] - GRID_TOP + CELL_SIZE // 2) // CELL_SIZE
-                        
-                        if 0 <= grid_x < GRID_SIZE and 0 <= grid_y < GRID_SIZE and self.can_place(self.dragging_block, grid_y, grid_x):
-                            self.place_block(self.dragging_block, grid_y, grid_x)
+                        gx = (self.dragging_block.pos[0] - GRID_MARGIN + CELL_SIZE // 2) // CELL_SIZE
+                        gy = (self.dragging_block.pos[1] - GRID_TOP + CELL_SIZE // 2) // CELL_SIZE
+                        if 0 <= gx < GRID_SIZE and 0 <= gy < GRID_SIZE and self.can_place(self.dragging_block, gy, gx):
+                            self.place_block(self.dragging_block, gy, gx)
                         else:
                             self.dragging_block.pos = list(self.dragging_block.original_pos)
-                        
                         self.dragging_block.dragging = False
                         self.dragging_block = None
-
                 if event.type == pygame.MOUSEMOTION:
                     if self.dragging_block:
                         pos = pygame.mouse.get_pos()
@@ -278,33 +249,24 @@ class Game:
 
             self.aurora.draw(self.screen)
             self.draw_grid()
-            
             for block in self.blocks:
-                if block != self.dragging_block:
-                    block.draw(self.screen)
-            
-            if self.dragging_block:
-                self.dragging_block.draw(self.screen)
+                if block != self.dragging_block: block.draw(self.screen)
+            if self.dragging_block: self.dragging_block.draw(self.screen)
 
             # UI
             score_surf = self.font.render(f"{self.score}", True, WHITE)
-            score_rect = score_surf.get_rect(center=(SCREEN_WIDTH // 2, 60))
-            self.screen.blit(score_surf, score_rect)
-            
-            label_surf = self.small_font.render("SCORE", True, (200, 220, 255))
-            label_rect = label_surf.get_rect(center=(SCREEN_WIDTH // 2, 25))
-            self.screen.blit(label_surf, label_rect)
+            self.screen.blit(score_surf, score_rect := score_surf.get_rect(center=(SCREEN_WIDTH // 2, 70)))
+            label_surf = self.small_font.render("SCORE", True, (180, 200, 255))
+            self.screen.blit(label_surf, label_rect := label_surf.get_rect(center=(SCREEN_WIDTH // 2, 30)))
 
             if self.game_over:
                 overlay = pygame.Surface((SCREEN_WIDTH, SCREEN_HEIGHT), pygame.SRCALPHA)
-                overlay.fill((0, 0, 0, 180))
+                overlay.fill((0, 0, 0, 200))
                 self.screen.blit(overlay, (0, 0))
-                
-                over_text = self.font.render("GAME OVER", True, WHITE)
-                restart_text = self.small_font.render("Press R to Restart", True, (200, 200, 200))
-                
-                self.screen.blit(over_text, over_text.get_rect(center=(SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2 - 20)))
-                self.screen.blit(restart_text, restart_text.get_rect(center=(SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2 + 30)))
+                over_t = self.font.render("GAME OVER", True, WHITE)
+                rest_t = self.small_font.render("Press R to Restart", True, (200, 200, 200))
+                self.screen.blit(over_t, over_t.get_rect(center=(SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2 - 20)))
+                self.screen.blit(rest_t, rest_t.get_rect(center=(SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2 + 40)))
 
             pygame.display.flip()
             self.clock.tick(60)
